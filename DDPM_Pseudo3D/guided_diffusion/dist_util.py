@@ -19,10 +19,11 @@ GPUS_PER_NODE = 8
 SETUP_RETRY_COUNT = 3
 
 
+""" 
 def setup_dist():
-    """
+    
     Setup a distributed process group.
-    """
+    
     if dist.is_initialized():
         return
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -44,6 +45,37 @@ def setup_dist():
     s.close()
     os.environ["MASTER_PORT"] = str(port)
     dist.init_process_group(backend=backend, init_method="env://")
+"""
+
+
+def setup_dist():
+    """
+    Disable distributed training (single-process / single-GPU).
+    This avoids Windows socket/hostname issues.
+    """
+    if th.cuda.is_available():
+        th.cuda.set_device(0)
+
+
+def is_distributed():
+    """
+    Return True when a torch.distributed process group is initialized.
+    """
+    return dist.is_available() and dist.is_initialized()
+
+
+def get_rank():
+    """
+    Return the current rank, or 0 in single-process mode.
+    """
+    return dist.get_rank() if is_distributed() else 0
+
+
+def get_world_size():
+    """
+    Return the world size, or 1 in single-process mode.
+    """
+    return dist.get_world_size() if is_distributed() else 1
 
 
 def dev():
@@ -72,6 +104,8 @@ def sync_params(params):
     """
     Synchronize a sequence of Tensors across ranks from rank 0.
     """
+    if not is_distributed():
+        return
     for p in params:
         with th.no_grad():
             dist.broadcast(p, 0)

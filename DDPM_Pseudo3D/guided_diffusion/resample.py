@@ -4,6 +4,8 @@ import numpy as np
 import torch as th
 import torch.distributed as dist
 
+from . import dist_util
+
 
 def create_named_schedule_sampler(name, diffusion, maxt):
     """
@@ -80,9 +82,15 @@ class LossAwareSampler(ScheduleSampler):
         :param local_ts: an integer Tensor of timesteps.
         :param local_losses: a 1D Tensor of losses.
         """
+        if not dist_util.is_distributed():
+            self.update_with_all_losses(
+                [x.item() for x in local_ts], [x.item() for x in local_losses]
+            )
+            return
+
         batch_sizes = [
             th.tensor([0], dtype=th.int32, device=local_ts.device)
-            for _ in range(dist.get_world_size())
+            for _ in range(dist_util.get_world_size())
         ]
         dist.all_gather(
             batch_sizes,
